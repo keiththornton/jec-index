@@ -1,6 +1,18 @@
 {
-  "description": "After any tool call that changed source files (Edit, Write, or a shell command that generated or formatted code), run only the tests that cover those files and report failures back to Claude.",
+  "description": "Injects jec-index usage guidance at session start (no CLAUDE.md edits needed), and after any tool call that changed source files runs only the tests that cover those files and reports failures back to Claude.",
   "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/session-start.sh\"",
+            "timeout": 60
+          }
+        ]
+      }
+    ],
     "PostToolUse": [
       {
         "matcher": "*",

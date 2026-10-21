@@ -147,6 +147,9 @@ async function postEditHookInner(): Promise<number> {
   }
   // Only source files matter; the index only contains those, so membership is the filter.
   const files = [...changed].filter((f) => ix.index.files[f]);
+  // Attribution for the log: a change first noticed on a read/shell tool usually belongs to the
+  // Edit/Write just before it (the refresh after that call ran before the write settled).
+  const explicitRel = explicit ? ix.resolveFile(explicit) : undefined;
   if (!files.length) {
     if (explicit || report.removedFiles.length) {
       recordUsage(ix.root, { kind: 'hook', name: 'post-edit', args: { tool, file: explicit }, ms: Date.now() - t0, outcome: 'skipped', detail: explicit ? 'not in index' : `removed: ${report.removedFiles.slice(0, 5).join(', ')}` });
@@ -176,8 +179,18 @@ async function postEditHookInner(): Promise<number> {
       return 0;
     }
     const uncovered = r.targets.filter((t) => !t.tests.length && !ix.index.files[t.file]?.isTest).map((t) => t.file);
-    recordUsage(ix.root, { kind: 'hook', name: 'post-edit', args: { tool, files }, ms: Date.now() - t0, outcome: 'no-tests' });
-    if (uncovered.length) emit(`jec-index: no tests cover ${uncovered.length === 1 ? uncovered[0] : `${uncovered.length} changed files (${uncovered.slice(0, 4).map((f) => path.posix.basename(f)).join(', ')}${uncovered.length > 4 ? ', …' : ''})`}. Consider adding some.`);
+    recordUsage(ix.root, { kind: 'hook', name: 'post-edit', args: { tool, via: explicitRel ? 'file_path' : 'index-diff', files }, ms: Date.now() - t0, outcome: 'no-tests' });
+    // Nudge once per directory within the dedupe window: ten edits to one new feature folder
+    // should produce one "no tests here" note, not ten.
+    const areas = [...new Set(uncovered.map((f) => path.posix.dirname(f)))];
+    const quietKey = (a: string) => `no-tests:${a}`;
+    const freshAreas = areas.filter((a) => !(runs[quietKey(a)] && now - runs[quietKey(a)] < DEDUPE_WINDOW_MS * 4));
+    if (freshAreas.length) {
+      for (const a of freshAreas) runs[quietKey(a)] = now;
+      saveRecentRuns(ix.root, runs);
+      const what = uncovered.length === 1 ? uncovered[0] : `${uncovered.length} changed files in ${freshAreas.map((a) => a + '/').join(', ')}`;
+      emit(`jec-index: no tests cover ${what}. Consider adding some.`);
+    }
     return 0;
   }
 
@@ -201,7 +214,7 @@ async function postEditHookInner(): Promise<number> {
   for (const f of chosen) runs[f] = failed ? 0 : now; // a failure must re-run next time
   saveRecentRuns(ix.root, runs);
 
-  recordUsage(ix.root, { kind: 'hook', name: 'post-edit', args: { tool, files, tests: chosen, deduped }, ms: Date.now() - t0, outcome: failed ? 'failed' : 'passed' });
+  recordUsage(ix.root, { kind: 'hook', name: 'post-edit', args: { tool, via: explicitRel ? 'file_path' : 'index-diff', files, tests: chosen, deduped }, ms: Date.now() - t0, outcome: failed ? 'failed' : 'passed' });
   if (failed) {
     process.stderr.write(
       `jec-index: tests impacted by ${label} FAILED. Fix before moving on.\n` +

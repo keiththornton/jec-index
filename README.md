@@ -75,15 +75,9 @@ or `.mcp.json` in the project root (see `.mcp.json.example`). For the hook, add 
 
 The server indexes the git toplevel of its working directory (Claude Code sets cwd to the project root; a monorepo sub-package still gets the whole repo). Pass `--root <dir>` or set `JEC_INDEX_ROOT` to override. Add `.jec-index/` to your `.gitignore` (the server writes a `.gitignore` inside that folder too).
 
-### Nudging Claude to use it
+### No CLAUDE.md edits needed
 
-Claude discovers the tools on its own, but a line in `CLAUDE.md` makes the habit stick:
-
-```markdown
-Before reading a source file, call jec-index file_outline or get_symbol and only Read the line range you need.
-Before editing anything imported elsewhere, call impact and run the tests it lists. Before writing new code in an
-unfamiliar directory, call conventions on it. Use locate before grepping.
-```
+The plugin ships a `SessionStart` hook that prints a short, project-aware guidance block (what is indexed, which runners were found, and when to reach for `locate` / `get_symbol` / `impact` / `conventions`) into the session context on startup, resume, `/clear` and after compaction. That is what used to need a hand-written section in every project's `CLAUDE.md`; with the plugin installed it happens on every project automatically. Set `JEC_SESSION_DISABLE=1` to turn it off, or add your own `CLAUDE.md` lines if you want project-specific emphasis.
 
 ## Examples
 
@@ -119,7 +113,7 @@ The hook runs after **every** tool call, not just `Edit`/`Write`. It refreshes t
 
 Tests that passed within the last `JEC_HOOK_DEDUPE_SECONDS` (default 45) are not re-run for a burst of edits to the same area; failures are never deduped. Read-only tools (`Read`, `Grep`, `Glob`, …) and the plugin's own MCP calls are skipped without touching the index. The first run in a repo with no index builds it silently rather than treating every file as changed.
 
-Env: `JEC_HOOK_TIMEOUT` (seconds per command, default 120), `JEC_HOOK_MAX_TESTS`, `JEC_HOOK_DEDUPE_SECONDS`, `JEC_HOOK_DISABLE=1` to turn it off. Runners detected: vitest, jest, mocha, bun test, `node --test`, pytest or unittest, phpunit or pest; package manager from the lockfile.
+Env: `JEC_HOOK_TIMEOUT` (seconds per command, default 120), `JEC_HOOK_MAX_TESTS`, `JEC_HOOK_DEDUPE_SECONDS`, `JEC_HOOK_DISABLE=1` to turn the test hook off, `JEC_SESSION_DISABLE=1` to turn the session-start guidance off. Runners detected: vitest, jest, mocha, bun test, `node --test`, pytest or unittest, phpunit or pest; package manager from the lockfile.
 
 Every tool call and hook run is appended to `.jec-index/usage.log` (one JSON line each: name, args, duration, result size, outcome), so adoption and value can be measured after the fact.
 
@@ -150,7 +144,7 @@ jec-index tests tests/billing.test.ts      # prints the runner command
 
 - Dynamic dispatch, string-based registries, DI containers and reflection are invisible to import analysis. The git co-change signal partly compensates, which is why `impact` shows it alongside.
 - Python wildcard imports and unqualified PHP class references in the same namespace resolve coarsely (module-level).
-- Only `.ts/.tsx/.js/.jsx/.mjs/.cjs/.py/.php/.phtml` are indexed.
+- Only `.ts/.tsx/.js/.jsx/.mjs/.cjs/.py/.php/.phtml` are indexed. Root-level `public/`, `storage/`, `static/`, `media/`, `uploads/` and `assets/`, minified bundles (`*.min.js`, `*.bundle.js`) and checked-in third-party libraries (`vendor/`, `third_party/`, TinyMCE, FontAwesome, Summernote, …) are skipped unless the project's `tsconfig`/`composer.json` declares them as source.
 - The hook runs the test command it builds; if your project needs a wrapper (Docker, `poetry run`), add a shell shim on `PATH` or disable the hook and call `impact` manually.
 
 ## Development

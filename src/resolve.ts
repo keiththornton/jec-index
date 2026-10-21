@@ -80,7 +80,11 @@ export function loadProjectConfig(root: string, files: string[]): ProjectConfig 
     else if (existsSync(join(root, 'package-lock.json'))) config.packageManager = 'npm';
   }
   if (!config.runners.js && files.some((f) => /\.(test|spec)\.[tj]sx?$/.test(f))) {
-    config.runners.js = existsSync(join(root, 'node_modules/vitest')) ? 'vitest' : existsSync(join(root, 'node_modules/jest')) ? 'jest' : 'node-test';
+    // No runner declared: only infer one that is actually installed. Guessing `node --test`
+    // for a project that merely contains someone else's *.test.ts files produces commands that fail.
+    if (existsSync(join(root, 'node_modules/vitest'))) config.runners.js = 'vitest';
+    else if (existsSync(join(root, 'node_modules/jest'))) config.runners.js = 'jest';
+    else if (existsSync(join(root, 'node_modules/mocha'))) config.runners.js = 'mocha';
   }
 
   // --- Python ---

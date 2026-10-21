@@ -37,8 +37,23 @@ const DEFAULT_IGNORE_DIRS = new Set([
   ".pytest_cache",
   ".idea",
   ".vscode",
+  ".worktrees",
   INDEX_DIR,
 ]);
+
+/**
+ * Top-level directories that hold built, served or uploaded assets rather than source in the
+ * frameworks this indexer targets (Laravel/Django/Rails-style `public/` and `storage/`).
+ * Only applied at the repo root so a `src/public/` component folder is unaffected.
+ */
+const ROOT_ASSET_DIRS = new Set(["public", "storage", "static", "staticfiles", "media", "uploads", "assets"]);
+
+/**
+ * File-name patterns for vendored or generated code: minified bundles, source maps' companions,
+ * and copies of third-party libraries checked in under a vendor-ish directory anywhere in the tree.
+ */
+const GENERATED_FILE = /\.(min|bundle|chunk|pack)\.[cm]?js$|\.min\.ts$|[-.]bundle\.js$|\.(generated|gen|g)\.(ts|js|py|php)$/i;
+const VENDORED_DIR = /(^|\/)(vendor|vendors|third[-_]?party|3rdparty|libs?|lib\/vendor|external|jquery[^/]*|tinymce|ckeditor|summernote|fontawesome|font-awesome|bootstrap(?:-[\w.]+)?|chart\.js|chartjs|moment|lodash|select2|datatables?|splide|swiper|leaflet|highlight\.js|codemirror|monaco-editor|pdfjs|three)(\/|$)/i;
 
 export interface RefreshReport {
   scanned: number;
@@ -85,6 +100,7 @@ export class Indexer {
     }
     const ix = new Indexer(root, data ?? { version: INDEX_VERSION, root, builtAt: 0, config: emptyConfig(), files: {} });
     await ix.loadGitignore();
+    await ix.loadSourceRoots();
     // Re-detect project config and re-resolve imports on every open: tsconfig/composer edits and
     // resolver fixes then apply without a full re-parse.
     if (data) ix.relink();
@@ -119,8 +135,43 @@ export class Indexer {
   private isIgnoredRel(rel: string, name: string, isDir: boolean): boolean {
     if (this.ignoreDirs.has(name)) return true;
     for (const p of this.ignorePrefixes) if (rel === p || rel.startsWith(p + "/")) return true;
-    if (!isDir) for (const e of this.ignoreExts) if (name.endsWith(e)) return true;
+    if (isDir) {
+      if (!rel.includes("/") && ROOT_ASSET_DIRS.has(name) && !this.sourceRoots.has(name)) return true;
+      if (VENDORED_DIR.test(rel + "/") && !this.sourceRoots.has(rel.split("/")[0])) return true;
+      return false;
+    }
+    for (const e of this.ignoreExts) if (name.endsWith(e)) return true;
+    if (GENERATED_FILE.test(name)) return true;
     return false;
+  }
+
+  /** Top-level dirs the project itself declares as source (tsconfig include/rootDir, composer psr-4, pyproject). */
+  private sourceRoots = new Set<string>();
+
+  private async loadSourceRoots() {
+    const add = (p: unknown) => {
+      if (typeof p !== "string") return;
+      const top = p.replace(/^\.\//, "").replace(/\\/g, "/").split("/")[0];
+      if (top && !top.startsWith("*") && !top.startsWith(".")) this.sourceRoots.add(top);
+    };
+    try {
+      const raw = await fs.readFile(path.join(this.root, "composer.json"), "utf8");
+      const c = JSON.parse(raw);
+      for (const section of ["autoload", "autoload-dev"]) for (const dirs of Object.values(c?.[section]?.["psr-4"] ?? {})) (Array.isArray(dirs) ? dirs : [dirs]).forEach(add);
+    } catch {
+      /* no composer */
+    }
+    for (const name of ["tsconfig.json", "jsconfig.json"]) {
+      try {
+        const { stripJsonComments } = await import("./resolve.js");
+        const t = JSON.parse(stripJsonComments(await fs.readFile(path.join(this.root, name), "utf8")));
+        (t?.include ?? []).forEach(add);
+        add(t?.compilerOptions?.rootDir);
+        for (const targets of Object.values(t?.compilerOptions?.paths ?? {})) (targets as unknown[]).forEach(add);
+      } catch {
+        /* none */
+      }
+    }
   }
 
   /** Enumerate candidate source files (relative, posix-style). */

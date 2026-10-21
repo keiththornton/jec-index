@@ -3,6 +3,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { postEditHook } from "./hook.js";
+import { sessionStartHook } from "./session.js";
 import { Indexer } from "./indexer.js";
 import { createServer } from "./server.js";
 import { buildTestCommands } from "./tests.js";
@@ -22,6 +23,7 @@ Usage:
   jec-index recent [path] [--limit N]
   jec-index tests <test-file...>                   Print the runner command(s) for test files
   jec-index hook post-edit                         Claude Code PostToolUse hook (JSON on stdin): runs impacted tests
+  jec-index hook session-start                     Claude Code SessionStart hook: prints usage guidance for this repo
 
 Options:
   --root <dir>   Project to index. Default: git toplevel of $JEC_INDEX_ROOT, $CLAUDE_PROJECT_DIR, or cwd.
@@ -152,11 +154,10 @@ async function main(): Promise<number> {
       return 0;
     }
     case "hook": {
-      if (positional[0] !== "post-edit") {
-        process.stderr.write("usage: jec-index hook post-edit\n");
-        return 1;
-      }
-      return postEditHook();
+      if (positional[0] === "post-edit") return postEditHook();
+      if (positional[0] === "session-start") return sessionStartHook();
+      process.stderr.write("usage: jec-index hook <post-edit|session-start>\n");
+      return 1;
     }
     default:
       process.stderr.write(HELP);

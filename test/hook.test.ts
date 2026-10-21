@@ -96,7 +96,7 @@ describeIfBuilt("post-edit hook (requires `npm run build`)", () => {
     const r = runHook(fx.root, "Bash", { command: "node scaffold.js" });
     expect(r.code, r.stderr).toBe(0);
     // new files have no tests of their own, so the message is the no-tests nudge naming the batch
-    expect(ctx(r)).toMatch(/no tests cover 3 changed files \(a\.ts, b\.ts, c\.ts\)/);
+    expect(ctx(r)).toMatch(/no tests cover 3 changed files in src\/gen\//);
     expect(lastLog(fx.root).args.files).toEqual(["src/gen/a.ts", "src/gen/b.ts", "src/gen/c.ts"]);
   });
 

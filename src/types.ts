@@ -121,7 +121,7 @@ export interface IndexData {
 }
 
 /** Bump whenever extraction changes so stale on-disk indexes are rebuilt. */
-export const INDEX_VERSION = 5;
+export const INDEX_VERSION = 6;
 
 export function emptyFacts(): FileFacts {
   return { throws: {}, indent: "unknown", quotes: "unknown", asyncFunctions: 0, totalFunctions: 0, loggers: {} };

@@ -82,8 +82,8 @@ export function buildTestCommands(config: ProjectConfig, testFiles: string[]): T
   const py = testFiles.filter((f) => f.endsWith('.py'));
   const php = testFiles.filter((f) => f.endsWith('.php'));
   const out: TestCommand[] = [];
-  if (js.length) {
-    const runner = config.runners.js ?? 'vitest';
+  if (js.length && config.runners.js) {
+    const runner = config.runners.js;
     const x = pmExec(config.packageManager);
     const files = js.map(q).join(' ');
     const command =
