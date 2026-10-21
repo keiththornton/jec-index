@@ -1,0 +1,4 @@
+{
+  // comment to test tolerant parsing
+  "compilerOptions": { "baseUrl": ".", "paths": { "@/*": ["src/*"] }, },
+}

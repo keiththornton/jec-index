@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "jec-index": {
+      "type": "stdio",
+      "command": "bash",
+      "args": ["/path/to/jec-index/bin/launch.sh"]
+    }
+  }
+}

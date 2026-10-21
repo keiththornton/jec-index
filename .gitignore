@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.jec-index/
+.install.lock/
+_to_delete/
+*.log
+.DS_Store

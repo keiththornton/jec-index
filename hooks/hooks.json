@@ -1,0 +1,17 @@
+{
+  "description": "After any tool call that changed source files (Edit, Write, or a shell command that generated or formatted code), run only the tests that cover those files and report failures back to Claude.",
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/post-edit.sh\"",
+            "timeout": 300
+          }
+        ]
+      }
+    ]
+  }
+}

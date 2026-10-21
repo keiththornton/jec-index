@@ -1,0 +1,12 @@
+{
+  "name": "jec-index",
+  "description": "jec-index: structural code intelligence for Claude Code (symbols, callers, impact, tests, conventions) with an impacted-tests hook.",
+  "owner": { "name": "Keith Thornton" },
+  "plugins": [
+    {
+      "name": "jec-index",
+      "source": ".",
+      "description": "Persistent symbol + dependency index with impact analysis, test mapping, conventions, and a post-edit hook that runs only the impacted tests."
+    }
+  ]
+}

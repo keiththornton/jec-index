@@ -1,0 +1,6 @@
+{
+  "name": "jec-index",
+  "description": "Persistent symbol + dependency index for Claude Code: read one symbol instead of a file, see who depends on what, which tests cover it, and how an area is written — plus a hook that runs only the impacted tests after each edit.",
+  "version": "0.2.0",
+  "author": { "name": "Keith Thornton" }
+}

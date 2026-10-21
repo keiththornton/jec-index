@@ -1,0 +1,1 @@
+{ "name": "sample", "private": true, "type": "module", "scripts": { "test": "vitest run" }, "devDependencies": { "vitest": "^3.0.0" } }
