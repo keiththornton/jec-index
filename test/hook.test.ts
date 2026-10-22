@@ -100,6 +100,33 @@ describeIfBuilt("post-edit hook (requires `npm run build`)", () => {
     expect(lastLog(fx.root).args.files).toEqual(["src/gen/a.ts", "src/gen/b.ts", "src/gen/c.ts"]);
   });
 
+  it("does not run browser/e2e specs; runs the vitest ones and notes the spec", () => {
+    rmSync(join(fx.root, ".jec-index/hook-runs.json"), { force: true });
+    // billing.ts is covered by tests/billing.test.ts (vitest) and tests/e2e/billing.e2e.spec.ts (playwright)
+    const p = join(fx.root, "src/services/billing.ts");
+    writeFileSync(p, readFileSync(p, "utf8") + "// e2e\n");
+    bumpMtime(p);
+    const r = runHook(fx.root, "Edit", { file_path: p });
+    expect(r.code, r.stderr).toBe(0);
+    const msg = ctx(r);
+    expect(msg).toMatch(/vitest test file.* passed .* for src\/services\/billing\.ts/);
+    expect(msg).toMatch(/1 browser\/e2e spec not run by the hook/);
+    const last = lastLog(fx.root);
+    expect(last.args.tests).toEqual(["tests/billing.test.ts"]);
+    expect(last.args.e2eSkipped).toEqual(["tests/e2e/billing.e2e.spec.ts"]);
+  });
+
+  it("reports e2e-only coverage instead of running it", () => {
+    rmSync(join(fx.root, ".jec-index/hook-runs.json"), { force: true });
+    const p = join(fx.root, "tests/e2e/billing.e2e.spec.ts");
+    writeFileSync(p, readFileSync(p, "utf8") + "// touched\n");
+    bumpMtime(p);
+    const r = runHook(fx.root, "Edit", { file_path: p });
+    expect(r.code, r.stderr).toBe(0);
+    expect(ctx(r)).toMatch(/only browser\/e2e suites cover .*billing\.e2e\.spec\.ts/);
+    expect(lastLog(fx.root)).toMatchObject({ outcome: "e2e-only" });
+  });
+
   it("reports failures via exit code 2 with a concise summary and does not dedupe them", () => {
     rmSync(join(fx.root, ".jec-index/hook-runs.json"), { force: true });
     const p = join(fx.root, "src/utils/money.ts");

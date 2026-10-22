@@ -111,7 +111,7 @@ export async function impact(ix: Indexer, opts: ImpactOptions): Promise<ImpactRe
     for (const tt of fi.tests) allTests.add(tt.file);
   }
   result.tests = [...allTests].sort();
-  result.commands = buildTestCommands(ix.index.config, result.tests);
+  result.commands = buildTestCommands(ix.index.config, result.tests, (f) => ix.index.files[f]?.facts.testFramework);
   return result;
 }
 

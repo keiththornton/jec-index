@@ -55,7 +55,14 @@ export interface TestCommand {
   runner: string;
   command: string;
   files: string[];
+  /** Browser/e2e suites need a running app and take long; the hook skips them unless JEC_HOOK_E2E=1. */
+  e2e?: boolean;
 }
+
+/** Per-file test framework, when the file's own imports say so (overrides the project default). */
+export type FrameworkOf = (file: string) => string | undefined;
+
+const BROWSER_FRAMEWORKS = new Set(['playwright', 'cypress']);
 
 function pmExec(pm: ProjectConfig['packageManager']): string {
   switch (pm) {
@@ -77,14 +84,32 @@ function pyModule(path: string): string {
 const q = (f: string) => (/[\s"'$`\\]/.test(f) ? `'${f.replace(/'/g, `'\\''`)}'` : f);
 
 /** Build one shell command per language for the given test files. */
-export function buildTestCommands(config: ProjectConfig, testFiles: string[]): TestCommand[] {
-  const js = testFiles.filter((f) => /\.[cm]?[jt]sx?$/.test(f));
+export function buildTestCommands(config: ProjectConfig, testFiles: string[], frameworkOf: FrameworkOf = () => undefined): TestCommand[] {
+  const allJs = testFiles.filter((f) => /\.[cm]?[jt]sx?$/.test(f));
   const py = testFiles.filter((f) => f.endsWith('.py'));
   const php = testFiles.filter((f) => f.endsWith('.php'));
   const out: TestCommand[] = [];
+  // Route each JS test to the runner its imports declare; files that import @playwright/test must
+  // never be handed to vitest/jest (and vice versa).
+  const byFramework = new Map<string, string[]>();
+  for (const f of allJs) {
+    const fw = frameworkOf(f);
+    const key = fw && BROWSER_FRAMEWORKS.has(fw) ? fw : fw === 'jest' || fw === 'vitest' || fw === 'mocha' || fw === 'bun' || fw === 'node:test' ? fw : 'default';
+    byFramework.set(key, [...(byFramework.get(key) ?? []), f]);
+  }
+  const x = pmExec(config.packageManager);
+  for (const [fw, list] of byFramework) {
+    if (fw === 'default') continue;
+    const files = list.map(q).join(' ');
+    if (fw === 'playwright') out.push({ lang: 'js', runner: 'playwright', command: `${x} playwright test ${files}`, files: list, e2e: true });
+    else if (fw === 'cypress') out.push({ lang: 'js', runner: 'cypress', command: `${x} cypress run --spec ${list.map(q).join(',')}`, files: list, e2e: true });
+    else if (fw === 'node:test') out.push({ lang: 'js', runner: 'node-test', command: `node --test ${files}`, files: list });
+    else if (fw === 'bun') out.push({ lang: 'js', runner: 'bun', command: `bun test ${files}`, files: list });
+    else out.push({ lang: 'js', runner: fw, command: fw === 'vitest' ? `${x} vitest run ${files}` : `${x} ${fw} ${files}`, files: list });
+  }
+  const js = byFramework.get('default') ?? [];
   if (js.length && config.runners.js) {
     const runner = config.runners.js;
-    const x = pmExec(config.packageManager);
     const files = js.map(q).join(' ');
     const command =
       runner === 'vitest'

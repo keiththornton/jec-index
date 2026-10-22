@@ -111,9 +111,9 @@ The hook runs after **every** tool call, not just `Edit`/`Write`. It refreshes t
 - on failure, exits 2 with a trimmed failure report so Claude fixes it before moving on;
 - when nothing covers the changed files, says so — a nudge to add tests.
 
-Tests that passed within the last `JEC_HOOK_DEDUPE_SECONDS` (default 45) are not re-run for a burst of edits to the same area; failures are never deduped. Read-only tools (`Read`, `Grep`, `Glob`, …) and the plugin's own MCP calls are skipped without touching the index. The first run in a repo with no index builds it silently rather than treating every file as changed.
+Each JS test file is routed to the runner its imports declare (vitest, jest, mocha, `node --test`, bun), so a Playwright or Cypress spec is never handed to vitest. Browser/e2e suites (Playwright, Cypress) need a running app and take long, so the hook reports them instead of running them (`JEC_HOOK_E2E=1` to run them too); `impact` still prints their command. Tests that passed within the last `JEC_HOOK_DEDUPE_SECONDS` (default 45) are not re-run for a burst of edits to the same area; failures are never deduped. Read-only tools (`Read`, `Grep`, `Glob`, …) and the plugin's own MCP calls are skipped without touching the index. The first run in a repo with no index builds it silently rather than treating every file as changed.
 
-Env: `JEC_HOOK_TIMEOUT` (seconds per command, default 120), `JEC_HOOK_MAX_TESTS`, `JEC_HOOK_DEDUPE_SECONDS`, `JEC_HOOK_DISABLE=1` to turn the test hook off, `JEC_SESSION_DISABLE=1` to turn the session-start guidance off. Runners detected: vitest, jest, mocha, bun test, `node --test`, pytest or unittest, phpunit or pest; package manager from the lockfile.
+Env: `JEC_HOOK_TIMEOUT` (seconds per command, default 120), `JEC_HOOK_MAX_TESTS`, `JEC_HOOK_DEDUPE_SECONDS`, `JEC_HOOK_E2E=1`, `JEC_HOOK_DISABLE=1` to turn the test hook off, `JEC_SESSION_DISABLE=1` to turn the session-start guidance off. Runners detected: vitest, jest, mocha, bun test, `node --test`, pytest or unittest, phpunit or pest; package manager from the lockfile.
 
 Every tool call and hook run is appended to `.jec-index/usage.log` (one JSON line each: name, args, duration, result size, outcome), so adoption and value can be measured after the fact.
 

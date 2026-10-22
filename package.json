@@ -1,6 +1,6 @@
 {
   "name": "jec-index",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "MCP server + Claude Code hook: a persistent, incremental symbol and dependency index so Claude reads slices instead of files, sees impact before editing, and runs only the tests that matter.",
   "type": "module",
   "bin": {

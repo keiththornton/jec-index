@@ -85,8 +85,8 @@ describe("impact", () => {
     expect(t.symbol?.name).toBe("Money");
     expect(t.direct.map((d) => d.file).sort()).toEqual(["src/api/routes.ts", "src/services/billing.ts", "src/utils/money.test.ts"]);
     expect(t.transitive.map((x) => x.file)).toContain("src/index.ts");
-    expect(r.tests).toEqual(["src/utils/money.test.ts", "tests/billing.test.ts"]);
-    expect(r.commands[0].command).toBe("npx vitest run src/utils/money.test.ts tests/billing.test.ts");
+    expect(r.tests).toEqual(["src/utils/money.test.ts", "tests/billing.test.ts", "tests/e2e/billing.e2e.spec.ts"]);
+    expect(r.commands.find((c) => c.runner === "vitest")?.command).toBe("npx vitest run src/utils/money.test.ts tests/billing.test.ts");
     expect(fmtImpact(r)).toContain("Run impacted tests:");
   });
 
@@ -149,7 +149,7 @@ describe("conventions", () => {
     expect(all).toContain("Framework: pytest");
     expect(all).toContain("Framework: phpunit");
     expect(all).toContain("InsufficientFundsError");
-    expect(all).toMatch(/Most-imported modules: src\/utils\/money\.ts \(3\)/);
+    expect(all).toMatch(/Most-imported modules: .*src\/utils\/money\.ts \(3\)/);
     const be = conventions(ix, { area: "backend" });
     expect(be).toContain("## Python style");
     expect(be).not.toContain("## TypeScript style");
@@ -188,5 +188,18 @@ describe("incremental refresh relinks the graph", () => {
     // survives reload from disk
     const again = await Indexer.open(fx.root);
     expect(again.graph.importers.get("src/utils/money.ts")?.size).toBe(3);
+  });
+});
+
+describe("per-file test runners", () => {
+  it("routes Playwright specs to playwright and keeps them out of the vitest command", async () => {
+    const r = await impact(ix, { target: "BillingService" });
+    expect(r.tests).toContain("tests/e2e/billing.e2e.spec.ts");
+    const vitest = r.commands.find((c) => c.runner === "vitest")!;
+    const pw = r.commands.find((c) => c.runner === "playwright")!;
+    expect(vitest.command).not.toContain("e2e");
+    expect(pw).toMatchObject({ e2e: true, files: ["tests/e2e/billing.e2e.spec.ts"] });
+    expect(pw.command).toBe("npx playwright test tests/e2e/billing.e2e.spec.ts");
+    expect(ix.index.files["tests/e2e/billing.e2e.spec.ts"].facts.testFramework).toBe("playwright");
   });
 });

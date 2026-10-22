@@ -150,7 +150,7 @@ async function main(): Promise<number> {
     case "tests": {
       const ix = await openFresh(root);
       const files = positional.map((p) => ix.resolveFile(p) ?? p);
-      for (const c of buildTestCommands(ix.index.config, files)) process.stdout.write(c.command + "\n");
+      for (const c of buildTestCommands(ix.index.config, files, (f) => ix.index.files[f]?.facts.testFramework)) process.stdout.write(c.command + "\n");
       return 0;
     }
     case "hook": {

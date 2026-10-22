@@ -164,18 +164,32 @@ async function postEditHookInner(): Promise<number> {
   for (const t of r.targets) for (const x of t.tests) best.set(x.file, Math.min(best.get(x.file) ?? 9, rankOf(x.reason)));
   const ranked = [...best.entries()].sort((a, b) => a[1] - b[1] || a[0].localeCompare(b[0])).map(([f]) => f);
 
+  // Browser suites (Playwright/Cypress) need a dev server and take tens of seconds; leave them to
+  // `impact`'s printed commands unless explicitly enabled for the hook. Split them off first so the
+  // dedupe window, the log and the commands only ever see runnable tests.
+  const runE2E = process.env.JEC_HOOK_E2E === '1';
+  const frameworkOf = (f: string) => ix.index.files[f]?.facts.testFramework;
+  const isE2E = (f: string) => !runE2E && (frameworkOf(f) === 'playwright' || frameworkOf(f) === 'cypress');
+  const e2eSkipped = ranked.filter(isE2E);
+  const rankedRunnable = ranked.filter((f) => !isE2E(f));
+
   const runs = recentRuns(ix.root);
   const now = Date.now();
-  const fresh = ranked.filter((f) => !(runs[f] && now - runs[f] < DEDUPE_WINDOW_MS) || changed.has(f));
-  const chosen = fresh.slice(0, maxTests);
-  const skipped = ranked.length - chosen.length;
-  const deduped = ranked.length - fresh.length;
+  const fresh = rankedRunnable.filter((f) => !(runs[f] && now - runs[f] < DEDUPE_WINDOW_MS) || changed.has(f));
+  const runnable = fresh.slice(0, maxTests);
+  const skipped = rankedRunnable.length - runnable.length;
+  const deduped = rankedRunnable.length - fresh.length;
   const label = files.length === 1 ? files[0] : `${files.length} changed files (${files.slice(0, 3).map((f) => path.posix.basename(f)).join(', ')}${files.length > 3 ? ', …' : ''})`;
 
-  if (!chosen.length) {
-    if (ranked.length) {
-      // everything relevant ran within the dedupe window
+  if (!runnable.length) {
+    if (deduped) {
+      // everything runnable passed within the dedupe window
       recordUsage(ix.root, { kind: 'hook', name: 'post-edit', args: { tool, files, deduped }, ms: Date.now() - t0, outcome: 'deduped' });
+      return 0;
+    }
+    if (e2eSkipped.length) {
+      recordUsage(ix.root, { kind: 'hook', name: 'post-edit', args: { tool, via: explicitRel ? 'file_path' : 'index-diff', files, e2eSkipped }, ms: Date.now() - t0, outcome: 'e2e-only' });
+      emit(`jec-index: only browser/e2e suites cover ${label} (${e2eSkipped.map((f) => path.posix.basename(f)).join(', ')}); not run by the hook. Run them with \`impact\`'s command when the app is up.`);
       return 0;
     }
     const uncovered = r.targets.filter((t) => !t.tests.length && !ix.index.files[t.file]?.isTest).map((t) => t.file);
@@ -194,7 +208,7 @@ async function postEditHookInner(): Promise<number> {
     return 0;
   }
 
-  const commands = buildTestCommands(ix.index.config, chosen);
+  const commands = buildTestCommands(ix.index.config, runnable, frameworkOf);
   const results: string[] = [];
   let failed = false;
   let failureText = '';
@@ -211,14 +225,14 @@ async function postEditHookInner(): Promise<number> {
       results.push(`${c.files.length} ${c.runner} test file${c.files.length > 1 ? 's' : ''} passed in ${secs}s`);
     }
   }
-  for (const f of chosen) runs[f] = failed ? 0 : now; // a failure must re-run next time
+  for (const f of runnable) runs[f] = failed ? 0 : now; // a failure must re-run next time
   saveRecentRuns(ix.root, runs);
 
-  recordUsage(ix.root, { kind: 'hook', name: 'post-edit', args: { tool, via: explicitRel ? 'file_path' : 'index-diff', files, tests: chosen, deduped }, ms: Date.now() - t0, outcome: failed ? 'failed' : 'passed' });
+  recordUsage(ix.root, { kind: 'hook', name: 'post-edit', args: { tool, via: explicitRel ? 'file_path' : 'index-diff', files, tests: runnable, e2eSkipped: e2eSkipped.length ? e2eSkipped : undefined, deduped }, ms: Date.now() - t0, outcome: failed ? 'failed' : 'passed' });
   if (failed) {
     process.stderr.write(
       `jec-index: tests impacted by ${label} FAILED. Fix before moving on.\n` +
-        `Impacted tests: ${chosen.join(', ')}${skipped ? ` (+${skipped} not run)` : ''}\n` +
+        `Impacted tests: ${runnable.join(', ')}${skipped ? ` (+${skipped} not run)` : ''}\n` +
         failureText.trim() +
         '\n',
     );
@@ -227,6 +241,7 @@ async function postEditHookInner(): Promise<number> {
   const notes: string[] = [];
   if (deduped) notes.push(`${deduped} already passed moments ago`);
   if (skipped - deduped > 0) notes.push(`${skipped - deduped} deeper tests skipped; run \`impact\` for the full list`);
+  if (e2eSkipped.length) notes.push(`${e2eSkipped.length} browser/e2e spec${e2eSkipped.length > 1 ? 's' : ''} not run by the hook`);
   emit(`jec-index: ${results.join('; ')} for ${label}${notes.length ? ` (${notes.join('; ')})` : ''}.`);
   return 0;
 }

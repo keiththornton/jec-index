@@ -24,7 +24,7 @@ describeIfBuilt("session-start hook (requires `npm run build`)", () => {
       encoding: "utf8",
     });
     expect(r.status).toBe(0);
-    expect(r.stdout).toMatch(/^\[jec-index\] This repository is indexed: 20 source files \(9 TypeScript, 7 Python, 4 PHP\)/);
+    expect(r.stdout).toMatch(/^\[jec-index\] This repository is indexed: 22 source files \(11 TypeScript, 7 Python, 4 PHP\)/);
     expect(r.stdout).toContain("test runners: vitest, pytest, phpunit");
     expect(r.stdout).toContain("BEFORE editing anything imported elsewhere → impact");
     expect(r.stdout.length).toBeLessThan(2500);
